@@ -21,55 +21,98 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s",
 )
 
+# Colors pulled from the theme so the folder buttons match the entry box.
+ENTRY_FG = ["#F9F9FA", "#1F1D26"]
+ENTRY_HOVER = ["#ECECF0", "#2A2833"]
+ENTRY_TEXT = ["gray14", "#F3F2F7"]
+ENTRY_BORDER = ["#979DA2", "#3A3747"]
+
 
 class FileSorter:
     def __init__(self):
+        ctk.set_appearance_mode("dark")
+        ctk.set_default_color_theme("fileSorter/custom.json")
         self.app = ctk.CTk()
+        self.app.bind("<Button-1>", lambda event: event.widget.focus_set())
         self.app.title("File Organizer")
-        self.app.geometry("1000x1000")
+        self.app.geometry("480x620")
 
         self.startFile_Path = None
         self.destFile_Path = None
 
+        # Compact heading.
+        self.title_label = ctk.CTkLabel(
+            self.app,
+            text="File Organizer",
+            font=ctk.CTkFont(size=24, weight="bold"),
+        )
+        self.title_label.pack(padx=20, pady=(20, 12))
+
         self.entry = ctk.CTkEntry(
             self.app,
-            placeholder_text="Enter Cut Off Date",
+            placeholder_text="Format: YYYY",
+            width=260,
+            height=50,
+            font=ctk.CTkFont(size=15),
         )
-        self.entry.pack(padx=20, pady=20)
+        self.entry.pack(padx=20, pady=(10, 0))
+
+        self.entry_label = ctk.CTkLabel(
+            self.app,
+            text="Enter Cutoff Date Above.",
+            font=ctk.CTkFont(size=18),
+        )
+        self.entry_label.pack(padx=20, pady=(6, 15))
 
         self.button1 = ctk.CTkButton(
             self.app,
             text="Select File Starting Point",
-            border_color="blue",
+            width=260,
+            height=50,
+            font=ctk.CTkFont(size=18),
+            fg_color=ENTRY_FG,
+            hover_color=ENTRY_HOVER,
+            text_color=ENTRY_TEXT,
             border_width=2,
+            border_color=ENTRY_BORDER,
             command=self.button_eventStart,
         )
-        self.button1.pack(padx=20, pady=20)
+        self.button1.pack(padx=20, pady=15)
 
         self.button2 = ctk.CTkButton(
             self.app,
             text="Select File Destination Point",
-            border_color="blue",
+            width=260,
+            height=50,
+            font=ctk.CTkFont(size=18),
+            fg_color=ENTRY_FG,
+            hover_color=ENTRY_HOVER,
+            text_color=ENTRY_TEXT,
             border_width=2,
+            border_color=ENTRY_BORDER,
             command=self.button_eventDest,
         )
-        self.button2.pack(padx=20, pady=20)
+        self.button2.pack(padx=20, pady=15)
 
         self.button3 = ctk.CTkButton(
             self.app,
             text="Start Program",
-            border_color="green",
-            border_width=2,
+            width=260,
+            height=50,
+            font=ctk.CTkFont(size=18),
             command=self.start_program,
         )
-        self.button3.pack(padx=20, pady=20)
+        self.button3.pack(padx=20, pady=15)
 
         self.status_label = ctk.CTkLabel(self.app, text="")
-        self.status_label.pack(padx=20, pady=20)
+        self.status_label.pack(padx=20, pady=10)
 
         self.progressbar = ctk.CTkProgressBar(self.app)
         self.progressbar.set(0)
-        self.progressbar.pack(padx=20, pady=20)
+        self.progressbar.pack(padx=20, pady=10)
+
+        self.percent_label = ctk.CTkLabel(self.app, text="0%", text_color="#2DD4BF")
+        self.percent_label.pack(padx=20, pady=(0, 10))
 
     def button_eventStart(self):
         chosen = filedialog.askdirectory()
@@ -99,7 +142,10 @@ class FileSorter:
         self.app.after(0, lambda: messagebox.showinfo("Complete", f"Moved {moved} file(s)."))
 
     def _on_progress(self, done, total):
-        self.app.after(0, lambda: self.progressbar.set(done / total))
+        fraction = done / total 
+        percent = int(fraction * 100)
+        self.app.after(0, lambda: self.progressbar.set(fraction))
+        self.app.after(0, lambda: self.percent_label.configure(text=f"{percent}%"))
 
     def start_program(self):
         # Validate the cutoff year.
@@ -116,6 +162,7 @@ class FileSorter:
             return
 
         self.progressbar.set(0)
+        self.percent_label.configure(text="0%")
         self.button3.configure(state="disabled")
 
         threading.Thread(target=self._run_sort, args=(cutoff_year,), daemon=True).start()
