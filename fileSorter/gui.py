@@ -21,99 +21,137 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s",
 )
 
-# Colors pulled from the theme so the folder buttons match the entry box.
-ENTRY_FG = ["#F9F9FA", "#1F1D26"]
-ENTRY_HOVER = ["#ECECF0", "#2A2833"]
-ENTRY_TEXT = ["gray14", "#F3F2F7"]
-ENTRY_BORDER = ["#979DA2", "#3A3747"]
+
+PAGE_BG = "#FFFFFF"
+CARD_BG = "#F2F5F8"
+CARD_BORDER = "#E1E8EC"
+BLUE = "#2C5F8A"          
+BLUE_HOVER = "#21496B"
+GREEN = "#2E8B57"         
+GREEN_HOVER = "#246B45"
+TEXT = "#2D3436"
+HINT = "#636E72"
+INPUT_BG = "#FFFFFF"
+INPUT_BORDER = "#DFE6E9"
+PROGRESS_BG = "#DFE6E9"
+WHITE = "#FFFFFF"
 
 
 class FileSorter:
     def __init__(self):
-        ctk.set_appearance_mode("dark")
+        ctk.set_appearance_mode("light")
         ctk.set_default_color_theme("fileSorter/custom.json")
         self.app = ctk.CTk()
+        self.app.configure(fg_color=PAGE_BG)
         self.app.bind("<Button-1>", lambda event: event.widget.focus_set())
         self.app.title("File Organizer")
-        self.app.geometry("480x620")
+        self.app.geometry("560x800")
+        self.app.minsize(520, 760)
 
         self.startFile_Path = None
         self.destFile_Path = None
 
-        # Compact heading.
-        self.title_label = ctk.CTkLabel(
-            self.app,
-            text="File Organizer",
-            font=ctk.CTkFont(size=24, weight="bold"),
-        )
-        self.title_label.pack(padx=20, pady=(20, 12))
+        
+        card1 = self._make_card()
+        self._step_header(card1, "1", "Step 1: Set Cut-off Year")
+
+        ctk.CTkLabel(
+            card1, text="Cut-off Year", text_color=TEXT,
+            font=ctk.CTkFont(size=15, weight="bold"),
+        ).pack(anchor="w", padx=20, pady=(4, 4))
 
         self.entry = ctk.CTkEntry(
-            self.app,
-            placeholder_text="Format: YYYY",
-            width=260,
-            height=50,
-            font=ctk.CTkFont(size=15),
+            card1,
+            placeholder_text="e.g., 2023",
+            placeholder_text_color=HINT,
+            height=48,
+            fg_color=INPUT_BG,
+            border_color=INPUT_BORDER,
+            border_width=2,
+            text_color=TEXT,
+            font=ctk.CTkFont(size=16),
         )
-        self.entry.pack(padx=20, pady=(10, 0))
+        self.entry.pack(fill="x", padx=20)
 
-        self.entry_label = ctk.CTkLabel(
-            self.app,
-            text="Enter Cutoff Date Above.",
-            font=ctk.CTkFont(size=18),
-        )
-        self.entry_label.pack(padx=20, pady=(6, 15))
+        ctk.CTkLabel(
+            card1, text="Format: YYYY (4 digits)", text_color=HINT,
+            font=ctk.CTkFont(size=12),
+        ).pack(anchor="w", padx=20, pady=(4, 18))
+
+        
+        card2 = self._make_card()
+        self._step_header(card2, "2", "Step 2: Select Folders")
 
         self.button1 = ctk.CTkButton(
-            self.app,
-            text="Select File Starting Point",
-            width=260,
-            height=50,
-            font=ctk.CTkFont(size=18),
-            fg_color=ENTRY_FG,
-            hover_color=ENTRY_HOVER,
-            text_color=ENTRY_TEXT,
-            border_width=2,
-            border_color=ENTRY_BORDER,
+            card2, text="Choose where files are now",
+            height=56, font=ctk.CTkFont(size=16, weight="bold"),
+            fg_color=BLUE, hover_color=BLUE_HOVER, text_color=WHITE,
             command=self.button_eventStart,
         )
-        self.button1.pack(padx=20, pady=15)
+        self.button1.pack(fill="x", padx=20, pady=(4, 8))
 
         self.button2 = ctk.CTkButton(
-            self.app,
-            text="Select File Destination Point",
-            width=260,
-            height=50,
-            font=ctk.CTkFont(size=18),
-            fg_color=ENTRY_FG,
-            hover_color=ENTRY_HOVER,
-            text_color=ENTRY_TEXT,
-            border_width=2,
-            border_color=ENTRY_BORDER,
+            card2, text="Choose where to move them",
+            height=56, font=ctk.CTkFont(size=16, weight="bold"),
+            fg_color=BLUE, hover_color=BLUE_HOVER, text_color=WHITE,
             command=self.button_eventDest,
         )
-        self.button2.pack(padx=20, pady=15)
+        self.button2.pack(fill="x", padx=20, pady=(0, 18))
+
+        
+        card3 = self._make_card()
+        self._step_header(card3, "3", "Step 3: Start Organization")
 
         self.button3 = ctk.CTkButton(
-            self.app,
-            text="Start Program",
-            width=260,
-            height=50,
-            font=ctk.CTkFont(size=18),
+            card3, text="Start",
+            height=52, font=ctk.CTkFont(size=20, weight="bold"),
+            fg_color=GREEN, hover_color=GREEN_HOVER, text_color=WHITE,
             command=self.start_program,
         )
-        self.button3.pack(padx=20, pady=15)
+        self.button3.pack(fill="x", padx=20, pady=(4, 12))
 
-        self.status_label = ctk.CTkLabel(self.app, text="")
-        self.status_label.pack(padx=20, pady=10)
-
-        self.progressbar = ctk.CTkProgressBar(self.app)
+        self.progressbar = ctk.CTkProgressBar(
+            card3, height=20, corner_radius=10,
+            fg_color=PROGRESS_BG, progress_color=BLUE,
+        )
         self.progressbar.set(0)
-        self.progressbar.pack(padx=20, pady=10)
+        self.progressbar.pack(fill="x", padx=20)
 
-        self.percent_label = ctk.CTkLabel(self.app, text="0%", text_color="#2DD4BF")
-        self.percent_label.pack(padx=20, pady=(0, 10))
+        self.percent_label = ctk.CTkLabel(
+            card3, text="0%", text_color=BLUE,
+            font=ctk.CTkFont(size=14, weight="bold"),
+        )
+        self.percent_label.pack(pady=(8, 4))
 
+        self.status_label = ctk.CTkLabel(
+            card3, text="", text_color=HINT, font=ctk.CTkFont(size=14),
+        )
+        self.status_label.pack(pady=(0, 18))
+
+    
+    def _make_card(self):
+        card = ctk.CTkFrame(
+            self.app, fg_color=CARD_BG, corner_radius=12,
+            border_width=1, border_color=CARD_BORDER,
+        )
+        card.pack(fill="x", padx=24, pady=12)
+        return card
+
+    def _step_header(self, parent, number, title):
+        row = ctk.CTkFrame(parent, fg_color="transparent")
+        row.pack(fill="x", padx=20, pady=(18, 10))
+        badge = ctk.CTkLabel(
+            row, text=number, width=36, height=36, corner_radius=18,
+            fg_color=BLUE, text_color=WHITE,
+            font=ctk.CTkFont(size=16, weight="bold"),
+        )
+        badge.pack(side="left")
+        ctk.CTkLabel(
+            row, text=title, text_color=TEXT,
+            font=ctk.CTkFont(size=19, weight="bold"),
+        ).pack(side="left", padx=12)
+
+    
     def button_eventStart(self):
         chosen = filedialog.askdirectory()
         if chosen:
@@ -126,6 +164,7 @@ class FileSorter:
             self.destFile_Path = Path(chosen)
             print("Destination folder:", self.destFile_Path)
 
+    
     def _run_sort(self, cutoff_year):
         try:
             moved = sort_files(
@@ -135,6 +174,7 @@ class FileSorter:
         except Exception as exc:
             logging.exception("Run failed")
             self.app.after(0, lambda: messagebox.showerror("Error", str(exc)))
+            self.app.after(0, lambda: self.status_label.configure(text="Error."))
             self.app.after(0, lambda: self.button3.configure(state="normal"))
             return
         self.app.after(0, lambda: self.status_label.configure(text=f"Done. Moved {moved} file(s)."))
@@ -142,7 +182,7 @@ class FileSorter:
         self.app.after(0, lambda: messagebox.showinfo("Complete", f"Moved {moved} file(s)."))
 
     def _on_progress(self, done, total):
-        fraction = done / total 
+        fraction = done / total
         percent = int(fraction * 100)
         self.app.after(0, lambda: self.progressbar.set(fraction))
         self.app.after(0, lambda: self.percent_label.configure(text=f"{percent}%"))
@@ -153,16 +193,17 @@ class FileSorter:
         try:
             cutoff_year = int(raw)
         except ValueError:
-            messagebox.showerror("Invalid input", "Cut off date must be a year, e.g. 2020.")
+            messagebox.showerror("Invalid input", "Cut-off year must be a number, e.g. 2020.")
             return
 
-        # Validate folder selections.
+        
         if self.startFile_Path is None or self.destFile_Path is None:
             messagebox.showerror("Missing folders", "Please select both a start and destination folder.")
             return
 
         self.progressbar.set(0)
         self.percent_label.configure(text="0%")
+        self.status_label.configure(text="Moving files...")
         self.button3.configure(state="disabled")
 
         threading.Thread(target=self._run_sort, args=(cutoff_year,), daemon=True).start()
