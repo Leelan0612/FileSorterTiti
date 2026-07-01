@@ -1,6 +1,3 @@
-
-
-
 from __future__ import annotations
 
 import logging
@@ -64,19 +61,25 @@ def sort_files(start_path: Path, dest_path: Path, cutoff_year: int, progress_cal
                 continue
             done += 1
             if progress_callback is not None:
-                progress_callback(done, total or 1)   
-            
+                progress_callback(done, total or 1)
+
             try:
                 file_year = int(file.stem)
             except ValueError:
                 logger.info("Skipped non-year file: %s", file.name)
                 continue
-                
+
             if file_year < cutoff_year:
+
+                target_path = target_dir / file.name
+                if target_path.exists():
+                    continue  # Change this logic based off what you actually want to do if duplicate file.
+
+                # Could also add a variable to count how many times we skipped a duplicate file?
+
                 shutil.move(str(file), str(target_dir))
                 logger.info("Moved %s -> %s", file.name, target_dir)
                 moved += 1
-                
 
     logger.info("Run complete. Moved %d files.", moved)
     return moved
