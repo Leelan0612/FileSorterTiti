@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import shutil
 import filecmp
+import time
 from send2trash import send2trash
 from pathlib import Path
 
@@ -11,30 +12,28 @@ logger = logging.getLogger(__name__)
 
 
 def sort_files(start_path: Path, dest_path: Path, cutoff_year: int, progress_callback=None) -> int:
-    """Move year-named files older than ``cutoff_year`` from source to destination.
+    """Move year folders older than cutoff_year from source to destination.
 
-    For every sub-folder of ``start_path``, a matching folder is created under
-    ``dest_path``. Any file whose stem parses as an integer year less than
-    ``cutoff_year`` is moved into that mirrored folder.
+    Structure expected:
 
-    Duplicate handling: if a file with the same name already exists at the
-    destination and is byte-for-byte identical, the source copy is sent to the
-    recycle bin (removed from the source, not duplicated). If the names match
-    but the contents differ, both files are left untouched and the conflict is
-    logged, so nothing is ever lost silently.
+        Source/
+            Person 1/
+                2021/
+                2022/
+                Random Folder/
 
-    Args:
-        start_path: Source directory containing sub-folders of files.
-        dest_path: Destination directory; mirrored sub-folders are created here.
-        cutoff_year: Files with a year strictly less than this are moved.
-        progress_callback: Optional callable(done, total) for progress updates.
+        Destination/
+            Person 1/
+                2021/
 
-    Returns:
-        The number of files moved.
-
-    Raises:
-        ValueError: If either path is missing or not a directory.
+    Logic:
+    - Create matching person folder in destination if missing.
+    - Move the whole year folder if destination does not already have it.
+    - If the year folder already exists, move only missing contents.
+    - If the same content already exists, skip it.
+    - If same file name exists but contents differ, leave both alone and log conflict.
     """
+
     start_path = Path(start_path)
     dest_path = Path(dest_path)
 
@@ -45,11 +44,21 @@ def sort_files(start_path: Path, dest_path: Path, cutoff_year: int, progress_cal
 
     total = 0
 
-    for item in start_path.iterdir():
-        if not item.is_dir():
+    # Count year folders for progress tracking
+    for person_folder in start_path.iterdir():
+        if not person_folder.is_dir():
             continue
-        for file in item.iterdir():
-            if file.is_file():
+
+        for year_folder in person_folder.iterdir():
+            if not year_folder.is_dir():
+                continue
+
+            try:
+                folder_year = int(year_folder.name)
+            except ValueError:
+                continue
+
+            if folder_year < cutoff_year:
                 total += 1
 
     moved = 0
@@ -57,57 +66,102 @@ def sort_files(start_path: Path, dest_path: Path, cutoff_year: int, progress_cal
     duplicates_removed = 0
     conflicts = 0
 
-    logger.info("Run started. Source=%s Destination=%s Cutoff=%s",
-                start_path, dest_path, cutoff_year)
-
-    for item in start_path.iterdir():
-        if not item.is_dir():
+    logger.info(
+        "Run started. Source=%s Destination=%s Cutoff=%s",
+        start_path,
+        dest_path,
+        cutoff_year,
+    )
+    start_time = time.perf_counter()
+    for person_folder in start_path.iterdir():
+        if not person_folder.is_dir():
             continue
 
-        target_dir = dest_path / item.name
-        target_dir.mkdir(exist_ok=True)
+        target_person_dir = dest_path / person_folder.name
+        target_person_dir.mkdir(exist_ok=True)
 
-        for file in item.iterdir():
-            if not file.is_file():
+        for year_folder in person_folder.iterdir():
+            if not year_folder.is_dir():
                 continue
-            done += 1
-            if progress_callback is not None:
-                progress_callback(done, total or 1)
 
             try:
-                file_year = int(file.stem)
+                folder_year = int(year_folder.name)
             except ValueError:
-                logger.info("Skipped non-year file: %s", file.name)
+                logger.info("Skipped non-year folder: %s", year_folder.name)
                 continue
 
-            if file_year < cutoff_year:
+            if folder_year >= cutoff_year:
+                continue
 
-                target_path = target_dir / file.name
-                if target_path.exists():
-                    same = (
-                        file.stat().st_size == target_path.stat().st_size
-                        and filecmp.cmp(file, target_path, shallow=False)
-                    )
-                    if same:
-                        
-                        try:
-                            send2trash(str(file))
-                            duplicates_removed += 1
-                            logger.info("Duplicate removed from source: %s", file.name)
-                        except OSError as exc:
-                            logger.warning("Could not trash duplicate %s: %s", file.name, exc)
+            done += 1
+
+            elapsed = time.perf_counter() - start_time
+            avg_time = elapsed / done
+            remaining = avg_time * (total - done)
+
+            if progress_callback is not None and total > 0:
+                progress_callback(done, total, remaining)
+
+            target_year_dir = target_person_dir / year_folder.name
+
+            # Case 1: Destination does not have this year folder yet.
+            # Move the entire year folder.
+            if not target_year_dir.exists():
+                shutil.move(str(year_folder), str(target_person_dir))
+                moved += 1
+                logger.info("Moved year folder %s -> %s", year_folder, target_person_dir)
+                continue
+
+            # Case 2: Destination already has this year folder.
+            # Move only missing contents.
+            for content in year_folder.iterdir():
+                target_content = target_year_dir / content.name
+
+                if target_content.exists():
+                    # If both are files, compare them.
+                    if content.is_file() and target_content.is_file():
+                        same = (
+                            content.stat().st_size == target_content.stat().st_size
+                            and filecmp.cmp(content, target_content, shallow=False)
+                        )
+
+                        if same:
+                            try:
+                                send2trash(str(content))
+                                duplicates_removed += 1
+                                logger.info("Duplicate removed from source: %s", content)
+                            except OSError as exc:
+                                logger.warning("Could not trash duplicate %s: %s", content, exc)
+                        else:
+                            conflicts += 1
+                            logger.warning(
+                                "Name conflict left in place because contents differ: %s",
+                                content,
+                            )
+
+                    # If both are folders, skip to avoid overwriting or merging blindly.
+                    elif content.is_dir() and target_content.is_dir():
+                        duplicates_removed += 1
+                        logger.info("Skipped existing folder: %s", content)
+
                     else:
-                        
                         conflicts += 1
-                        logger.warning("Name conflict left in place (different content): %s", file.name)
+                        logger.warning(
+                            "Name conflict left in place because item types differ: %s",
+                            content,
+                        )
+
                     continue
 
-                shutil.move(str(file), str(target_dir))
-                logger.info("Moved %s -> %s", file.name, target_dir)
+                shutil.move(str(content), str(target_year_dir))
                 moved += 1
+                logger.info("Moved content %s -> %s", content, target_year_dir)
 
     logger.info(
-        "Run complete. Moved %d, duplicates removed %d, conflicts left %d.",
-        moved, duplicates_removed, conflicts,
+        "Run complete. Moved %d, duplicates skipped %d, conflicts left %d.",
+        moved,
+        duplicates_removed,
+        conflicts,
     )
+
     return moved

@@ -14,7 +14,12 @@ from tkinter import filedialog, messagebox
 
 import customtkinter as ctk
 
-from fileSorter.sorter import sort_files
+from .sorter import sort_files
+
+def resource_path(relative_path):
+    if hasattr(sys, "_MEIPASS"):
+        return Path(sys._MEIPASS) / relative_path
+    return Path(__file__).parent / relative_path
 
 
 def resource_path(relative: str) -> str:
@@ -36,6 +41,19 @@ def _log_file() -> Path:
     folder = Path(base) / "FileOrganizer"
     folder.mkdir(parents=True, exist_ok=True)
     return folder / "file_sorter.log"
+
+def format_time(seconds):
+    seconds = int(seconds)
+
+    hours, seconds = divmod(seconds, 3600)
+    minutes, seconds = divmod(seconds, 60)
+
+    if hours:
+        return f"{hours}h {minutes}m {seconds}s"
+    elif minutes:
+        return f"{minutes}m {seconds}s"
+    else:
+        return f"{seconds}s"
 
 
 LOG_FILE = _log_file()
@@ -66,8 +84,14 @@ SECONDARY_HOVER = "#E8EEF3"
 class FileSorter:
     def __init__(self):
         ctk.set_appearance_mode("light")
-        ctk.set_default_color_theme(resource_path("custom.json"))
+        ctk.set_default_color_theme(str(resource_path("fileSorter/custom.json")))
         self.app = ctk.CTk()
+        icon_path = resource_path("app.ico")
+
+        try:
+            self.app.iconbitmap(str(icon_path))
+        except Exception:
+            pass
         self.app.configure(fg_color=PAGE_BG)
         self.app.bind("<Button-1>", lambda event: event.widget.focus_set())
         self.app.title("File Organizer")
@@ -240,11 +264,19 @@ class FileSorter:
         self.app.after(0, lambda: self.button3.configure(state="normal"))
         self.app.after(0, lambda: messagebox.showinfo("Complete", f"Moved {moved} file(s)."))
 
-    def _on_progress(self, done, total):
+    def _on_progress(self, done, total, remaining):
         fraction = done / total
         percent = int(fraction * 100)
+
         self.app.after(0, lambda: self.progressbar.set(fraction))
         self.app.after(0, lambda: self.percent_label.configure(text=f"{percent}%"))
+
+        self.app.after(
+            0,
+            lambda: self.status_label.configure(
+                text=f"Moving folders... Time left: {format_time(remaining)}"
+            ),
+        )
 
     def start_program(self):
         raw = self.entry.get().strip()
